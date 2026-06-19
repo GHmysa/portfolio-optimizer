@@ -1,6 +1,6 @@
 # Portfolio Optimizer
 
-Applied Quantitative Methods project — Technische Hochshule Mitelhessen.
+Applied Quantitative Methods project — Technische Hochshule Mittelhessen.
 
 **Goal:** Apply Markowitz portfolio theory to the CAC40: find the optimal
 allocation across its 40 constituent stocks plus a cash position (risk-free
