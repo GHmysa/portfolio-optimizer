@@ -31,10 +31,10 @@ clever one-liner. Name variables to match the maths (e.g. `mu`, `sigma`,
 | `annualized_volatility(returns)` | `pd.Series` | σ × √252 per asset. |
 | `covariance_matrix(returns)` | `pd.DataFrame` | Σ × 252. Shape (n_assets × n_assets). |
 | `statistical_moments(returns)` | `pd.DataFrame` | Rows: mean_annual, volatility_annual, skewness, excess_kurtosis. |
-| `get_cac40_tickers()` | `list[str]` | 39 Yahoo Finance tickers. |
-| `get_cac40_weights()` | `dict[str, float]` | {ticker: weight_%}. Sum = 100.00 %. |
+| `get_cac40_tickers()` | `list[str]` | 40 Yahoo Finance tickers. Source: Euronext stocks page, verified 2026-06-19. |
 | `get_cac40_names()` | `dict[str, str]` | {ticker: company_name}. |
-| `get_estimated_tickers()` | `set[str]` | Tickers whose weights came from market cap (not Euronext). |
+| `get_cac40_sectors()` | `dict[str, str]` | {ticker: ICB sector}. Official for PDF-25; general ICB for remaining 15. |
+| `load_reference_weights()` | `pd.DataFrame` | 25 official Euronext weights (March 2026). Columns: ticker, mnemo, company_name, weight_pct. Reference only — do not use in return calculations. |
 | `BENCHMARK_TICKER` | `str` | `"^FCHI"` |
 | `RISK_FREE_RATE` | `float` | `0.0225` (2.25 % p.a.) |
 | `TRADING_DAYS_PER_YEAR` | `int` | `252` |
@@ -114,12 +114,12 @@ are resolved with the professor.
 
 ## Known Data Issues (summary for quick reference)
 
-### Weights — bottom 14 constituents
-The Euronext PDF only shows the top 25. The bottom 14 use *total* market cap
-from yfinance (2026-06-19 snapshot), normalised to the residual 9.43 %.
-**Crédit Agricole (ACA.PA) is flagged:** its free-float is ~41 % of total,
-so our 2.23 % weight is likely 1–2 pp too high vs. the official index weight.
-Use `get_estimated_tickers()` to flag these in the dashboard if needed.
+### Weights — 25 official, 15 not publicly available
+The Euronext public PDF discloses only 25 of 40 weights (90.57 % of the index).
+The remaining 15 require a paid licence. These weights are stored in
+`data/cac40_weights_ref.csv` for the dashboard concentration chart only.
+**No per-stock weights are used in return calculations** — the benchmark
+is always `^FCHI` via `fetch_benchmark()`.
 
 ### Benchmark — ^FCHI is price-return, not total-return
 Yahoo Finance's ^FCHI excludes dividend reinvestment. The true CAC40

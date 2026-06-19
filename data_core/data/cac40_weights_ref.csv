@@ -1,0 +1,36 @@
+# CAC40 official index weights — TOP 25 ONLY
+# Source:  Euronext CAC 40 Index Composition, March 31 2026
+#          live.euronext.com/sites/default/files/documentation/index-composition/CAC_40_Index_Composition.pdf
+# REFERENCE ONLY: do not use in return calculations.
+#   The CAC40 benchmark return is always taken from the ^FCHI price series
+#   via data_core.fetch_benchmark(). These 25 weights are solely for
+#   the index-concentration chart in the dashboard (Module C).
+# Coverage: 25 of 40 constituents, summing to 90.57%.
+#   The remaining 15 weights require a licensed Euronext data subscription.
+# Load in Python: pd.read_csv("cac40_weights_ref.csv", comment="#", encoding="utf-8")
+ticker,mnemo,company_name,weight_pct
+TTE.PA,TTE,TotalEnergies,9.52
+SU.PA,SU,Schneider Electric,7.57
+MC.PA,MC,LVMH,6.63
+AI.PA,AI,Air Liquide,5.90
+SAN.PA,SAN,Sanofi,5.53
+AIR.PA,AIR,Airbus,5.47
+SAF.PA,SAF,Safran,5.09
+BNP.PA,BNP,BNP Paribas,4.98
+OR.PA,OR,L'Oréal,4.80
+CS.PA,CS,AXA,4.14
+DG.PA,DG,Vinci,3.86
+EL.PA,EL,EssilorLuxottica,3.69
+RMS.PA,RMS,Hermès International,2.92
+ENGI.PA,ENGI,Engie,2.90
+BN.PA,BN,Danone,2.56
+GLE.PA,GLE,Société Générale,2.50
+LR.PA,LR,Legrand,1.98
+SGO.PA,SGO,Saint-Gobain,1.80
+ORA.PA,ORA,Orange,1.75
+HO.PA,HO,Thales,1.34
+VIE.PA,VIE,Veolia,1.25
+ML.PA,ML,Michelin,1.18
+KER.PA,KER,Kering,1.09
+MT.AS,MT,ArcelorMittal,1.07
+STMPA.PA,STMPA,STMicroelectronics,1.05

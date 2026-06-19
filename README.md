@@ -47,10 +47,10 @@ from data_core import (
     annualized_volatility, # pd.Series — σ × √252 per stock
     covariance_matrix,     # pd.DataFrame — annualised covariance matrix Σ
     statistical_moments,   # pd.DataFrame — mean / vol / skew / kurtosis
-    get_cac40_tickers,     # list[str] — 39 Yahoo Finance ticker strings
-    get_cac40_weights,     # dict[str, float] — {ticker: weight_%}
-    get_cac40_names,       # dict[str, str]   — {ticker: company_name}
-    get_estimated_tickers, # set[str] — tickers whose weights are estimated
+    get_cac40_tickers,     # list[str] — 40 Yahoo Finance ticker strings
+    get_cac40_names,       # dict[str, str] — {ticker: company_name}
+    get_cac40_sectors,     # dict[str, str] — {ticker: ICB sector}
+    load_reference_weights,# pd.DataFrame — 25 official Euronext weights (reference only)
     BENCHMARK_TICKER,      # str  — "^FCHI"
     RISK_FREE_RATE,        # float — 0.0225  (2.25 % p.a., EUR cash proxy)
     TRADING_DAYS_PER_YEAR, # int  — 252

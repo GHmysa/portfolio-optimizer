@@ -1,0 +1,53 @@
+# CAC40 constituent tickers — Yahoo Finance format
+# Source:  Euronext "CAC 40 Stocks" page
+#          live.euronext.com/de/node/11911701
+# Verified: 2026-06-19 (manual extraction from Euronext live page)
+# AXA (CS.PA): confirmed via Euronext composition PDF March 31 2026 (position #10,
+#   weight 4.14%) — it was accidentally omitted in the manual page copy.
+# ArcelorMittal (MT.AS): Yahoo Finance uses the Euronext Amsterdam primary listing;
+#   it is the only constituent that does not follow the .PA pattern.
+# Stellantis (STLAP.PA): Paris MNEMO is STLAP; verify on first yfinance run.
+# ICB sectors for the 15 stocks absent from the composition PDF are assigned
+#   from standard ICB Level-1 classification (not official Euronext data).
+# Load in Python: pd.read_csv("cac40_tickers.csv", comment="#", encoding="utf-8")
+ticker,mnemo,company_name,sector_icb
+AC.PA,AC,Accor,Consumer Discretionary
+AI.PA,AI,Air Liquide,Basic Materials
+AIR.PA,AIR,Airbus,Industrials
+MT.AS,MT,ArcelorMittal,Basic Materials
+CS.PA,CS,AXA,Financials
+BNP.PA,BNP,BNP Paribas,Financials
+EN.PA,EN,Bouygues,Industrials
+BVI.PA,BVI,Bureau Veritas,Industrials
+CAP.PA,CAP,Capgemini,Technology
+CA.PA,CA,Carrefour,Consumer Staples
+ACA.PA,ACA,Crédit Agricole,Financials
+BN.PA,BN,Danone,Consumer Staples
+DSY.PA,DSY,Dassault Systèmes,Technology
+FGR.PA,FGR,Eiffage,Industrials
+ENGI.PA,ENGI,Engie,Utilities
+EL.PA,EL,EssilorLuxottica,Health Care
+ERF.PA,ERF,Eurofins Scientific,Health Care
+ENX.PA,ENX,Euronext,Financials
+RMS.PA,RMS,Hermès International,Consumer Discretionary
+KER.PA,KER,Kering,Consumer Discretionary
+OR.PA,OR,L'Oréal,Consumer Discretionary
+LR.PA,LR,Legrand,Industrials
+MC.PA,MC,LVMH,Consumer Discretionary
+ML.PA,ML,Michelin,Consumer Discretionary
+ORA.PA,ORA,Orange,Telecommunications
+RI.PA,RI,Pernod Ricard,Consumer Staples
+PUB.PA,PUB,Publicis Groupe,Consumer Discretionary
+RNO.PA,RNO,Renault,Consumer Discretionary
+SAF.PA,SAF,Safran,Industrials
+SGO.PA,SGO,Saint-Gobain,Industrials
+SAN.PA,SAN,Sanofi,Health Care
+SU.PA,SU,Schneider Electric,Industrials
+GLE.PA,GLE,Société Générale,Financials
+STLAP.PA,STLAP,Stellantis,Consumer Discretionary
+STMPA.PA,STMPA,STMicroelectronics,Technology
+HO.PA,HO,Thales,Industrials
+TTE.PA,TTE,TotalEnergies,Energy
+URW.PA,URW,Unibail-Rodamco-Westfield,Real Estate
+VIE.PA,VIE,Veolia,Utilities
+DG.PA,DG,Vinci,Industrials
