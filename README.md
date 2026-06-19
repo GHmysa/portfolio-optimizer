@@ -1,6 +1,6 @@
 # Portfolio Optimizer
 
-Applied Quantitative Methods project — Université Paris-Saclay.
+Applied Quantitative Methods project — Technische Hochshule Mitelhessen.
 
 **Goal:** Apply Markowitz portfolio theory to the CAC40: find the optimal
 allocation across its 40 constituent stocks plus a cash position (risk-free
