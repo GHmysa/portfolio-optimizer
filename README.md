@@ -66,11 +66,11 @@ Pass `start=` and `end=` keyword args to override.
 
 | # | Limitation | Impact | Mitigation |
 |---|-----------|--------|------------|
-| 1 | Euronext only publishes top-25 weights publicly | Bottom-14 weights are derived from *total* market cap (yfinance), not official free-float weights | Use ^FCHI for all benchmark comparisons; treat bottom-14 weights as approximate |
-| 2 | Crédit Agricole (ACA.PA) free-float is ~41 % of total market cap | Our weight (2.23 %) is likely an overestimate by 1–2 pp | Document in report; sensitivity-test by removing ACA.PA |
-| 3 | Composition is a static September 2024 snapshot | CAC40 rebalances quarterly | Keep historical analysis within the same period; note in report |
-| 4 | ^FCHI is a price-return index (Yahoo Finance) | Slightly understates the actual index total return (dividends excluded) | Note in report; effect is ~2 % p.a. |
-| 5 | 40th constituent is unidentified | Optimizer runs on 39 stocks | Weight is <0.3 %; effect on results is negligible |
+| 1 | Euronext only publishes top-25 weights publicly | Weights for the remaining 15 constituents (~9.43 % of index) are unavailable without a paid data licence | `load_reference_weights()` provides the 25 confirmed weights for the dashboard concentration chart; all return calculations use `^FCHI` directly — no per-stock weights needed |
+| 2 | `^FCHI` is a **price-return** index on Yahoo Finance | Understates the true index total return by ~2 % p.a. (dividends excluded) | Note in report; for rigour, compare against CAC 40 GR (gross return) if available |
+| 3 | Constituent list is a static snapshot (Euronext stocks page, verified 2026-06-21) | CAC40 rebalances quarterly; one or two names may change | Historical analysis is run over a fixed past window where the composition was stable; rebalancing risk is minor for a 5-year backtest |
+| 4 | ArcelorMittal uses the Amsterdam listing `MT.AS` | Only non-`.PA` ticker; Euronext Amsterdam and Paris may have different public holidays | `fetch_prices()` forward-fills across non-trading days, aligning all series to the same daily grid |
+| 5 | Stellantis `STLAP.PA` is dual-listed (Paris + Milan + NYSE) | Yahoo Finance coverage of the Paris listing can be inconsistent | `fetch_prices()` drops failed tickers with a warning; run the integration test to verify before the full download |
 
 ---
 
@@ -116,13 +116,13 @@ pytest tests/ -v
 ```python
 from data_core import fetch_prices, fetch_benchmark, compute_log_returns, covariance_matrix
 
-prices    = fetch_prices()          # downloads ~1500 rows × 39 columns (~10 s)
+prices    = fetch_prices()          # downloads ~1500 rows × up to 40 columns (~15 s)
 benchmark = fetch_benchmark()
 returns   = compute_log_returns(prices)
 cov       = covariance_matrix(returns)
 
-print(prices.shape)       # (≈1500, 39)
-print(cov.shape)          # (39, 39)
+print(prices.shape)       # (≈1500, ≤40) — fewer if any tickers fail to download
+print(cov.shape)          # (≤40, ≤40)
 print(benchmark.head())
 ```
 
