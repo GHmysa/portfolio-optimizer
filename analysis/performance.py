@@ -105,3 +105,26 @@ def apply_cash_allocation(
 
     daily_risk_free = risk_free_rate / TRADING_DAYS_PER_YEAR
     return risky_weight * portfolio_returns + (1.0 - risky_weight) * daily_risk_free
+
+def comparison_table(
+    named_returns: dict[str, pd.Series],
+    risk_free_rate: float = RISK_FREE_RATE,
+) -> pd.DataFrame:
+    """
+    Side-by-side performance metrics for several return series.
+
+    One row per series, computed with performance_metrics(). This
+    produces the Module D deliverable per CLAUDE.md: the optimised
+    portfolio (with cash) next to the CAC40 benchmark.
+
+    Returns
+    -------
+    pd.DataFrame — rows: series names; columns:
+    annualized_return, annualized_volatility, sharpe_ratio.
+    """
+    rows = {
+        name: performance_metrics(series, risk_free_rate)
+        for name, series in named_returns.items()
+    }
+    return pd.DataFrame(rows).T
+
