@@ -22,7 +22,7 @@ from optimisation import (
 )
 
 
-RISK_FREE_RATE = 0.0225
+from data_core import RISK_FREE_RATE
 
 
 @pytest.fixture

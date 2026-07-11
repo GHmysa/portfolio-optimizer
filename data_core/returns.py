@@ -111,7 +111,7 @@ def statistical_moments(daily_returns: pd.DataFrame) -> pd.DataFrame:
 
     Returns
     -------
-    pd.DataFrame with index = ["mean", "volatility", "skewness", "kurtosis"]
+    pd.DataFrame with index = ["mean_annual", "volatility_annual", "skewness", "excess_kurtosis"]
     and columns = ticker symbols. All values are annualised where applicable.
 
     The four moments
