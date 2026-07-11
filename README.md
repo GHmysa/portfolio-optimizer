@@ -13,12 +13,12 @@ beats the actual CAC40 index.
 
 ```
 portfolio-optimizer/
-├── data_core/       Module A — data ingestion & statistics   (Maxime)
-├── optimisation/    Module B — Markowitz + Capital Allocation Line (Yusuf)
-├── dashboard/       Module C — Streamlit UI                  (Kris)
-├── analysis/        Module D — performance comparison        (Emin)
+├── data_core/       Module A — data ingestion & statistics   (Maxime)   ✅ complete
+├── optimisation/    Module B — Markowitz + Capital Allocation Line (Yusuf) ✅ complete
+├── dashboard/       Module C — Streamlit UI                  (Kris)     🔲 not started
+├── analysis/        Module D — performance comparison        (Emin)     🔲 not started
 ├── ai_advisor/      Module E — DEFERRED (see ai_advisor/README.md)
-└── tests/           pytest test suite
+└── tests/           pytest test suite (40 unit tests, 2 integration tests)
 ```
 
 ### How modules depend on each other
@@ -59,6 +59,46 @@ from data_core import (
 
 **Default date range:** 2019-01-01 → 2024-12-31 (6 years, ~1,500 trading days).
 Pass `start=` and `end=` keyword args to override.
+
+---
+
+## Optimisation Contract (what Module B provides)
+
+Import from `optimisation` directly:
+
+```python
+from optimisation import (
+    portfolio_return,           # float — w^T · mu
+    portfolio_volatility,       # float — sqrt(w^T · Sigma · w)
+    sharpe_ratio,               # float — (R_p - r_f) / sigma_p
+    minimum_variance_portfolio, # (weights, return, volatility)
+    max_sharpe_portfolio,       # (weights, return, volatility, sharpe)
+    efficient_frontier,         # (returns array, vols array, weights grid)
+    capital_allocation_line,    # (risky_weight, cash_weight, expected_return)
+)
+```
+
+**How to call from real data:**
+```python
+from data_core import (
+    fetch_prices, compute_log_returns, annualized_return,
+    covariance_matrix, RISK_FREE_RATE
+)
+from optimisation import max_sharpe_portfolio, capital_allocation_line
+
+prices  = fetch_prices()
+returns = compute_log_returns(prices)
+mu      = annualized_return(returns)
+sigma   = covariance_matrix(returns)
+
+weights, r_p, sigma_p, sharpe = max_sharpe_portfolio(mu, sigma, RISK_FREE_RATE)
+risky_w, cash_w, r_c = capital_allocation_line(
+    target_volatility=0.12,
+    tangency_return=r_p,
+    tangency_volatility=sigma_p,
+    risk_free_rate=RISK_FREE_RATE,
+)
+```
 
 ---
 
@@ -107,47 +147,56 @@ pip install -r requirements.txt
 # Unit tests only (no network, fast):
 pytest tests/ -v -m "not integration"
 
-# Include live yfinance tests:
+# Include live yfinance tests (requires internet):
 pytest tests/ -v
 ```
 
-### 5. Verify Module A works end-to-end
+You should see **40 tests pass** with no failures before touching any code.
+
+### 5. Verify Modules A + B work end-to-end
 
 ```python
-from data_core import fetch_prices, fetch_benchmark, compute_log_returns, covariance_matrix
+from data_core import fetch_prices, fetch_benchmark, compute_log_returns
+from data_core import annualized_return, covariance_matrix, RISK_FREE_RATE
+from optimisation import minimum_variance_portfolio, max_sharpe_portfolio, efficient_frontier
 
-prices    = fetch_prices()          # downloads ~1500 rows × up to 40 columns (~15 s)
-benchmark = fetch_benchmark()
-returns   = compute_log_returns(prices)
-cov       = covariance_matrix(returns)
+prices  = fetch_prices()                    # ~15 s, downloads 40 tickers
+returns = compute_log_returns(prices)
+mu      = annualized_return(returns)
+sigma   = covariance_matrix(returns)
 
-print(prices.shape)       # (≈1500, ≤40) — fewer if any tickers fail to download
-print(cov.shape)          # (≤40, ≤40)
-print(benchmark.head())
+mvp_weights, mvp_return, mvp_vol = minimum_variance_portfolio(mu, sigma)
+tan_weights, tan_return, tan_vol, sharpe = max_sharpe_portfolio(mu, sigma, RISK_FREE_RATE)
+ef_returns, ef_vols, ef_weights = efficient_frontier(mu, sigma, n_points=50)
+
+print(f"MVP:        return={mvp_return:.1%}  vol={mvp_vol:.1%}")
+print(f"Tangency:   return={tan_return:.1%}  vol={tan_vol:.1%}  Sharpe={sharpe:.2f}")
 ```
 
 ### Branch policy
 
-Work on your own module branch: `module-b`, `module-c`, `module-d`.
-Open a PR into `main` once your module passes tests and has been reviewed
+Each module lives on its own branch: `module-a`, `module-b`, `module-c`, `module-d`.
+Open a PR into `master` once your module passes tests and has been reviewed
 by at least one other team member.
 
 ---
 
-## Running the Dashboard (Module C — once built)
+## Running the Dashboard (Module C — not yet built)
 
 ```bash
 streamlit run dashboard/app.py
 ```
 
+Kris: implement `dashboard/app.py`. See `CLAUDE.md` for the required charts.
+
 ---
 
-## Project Timeline
+## Project Status
 
-| Milestone | Module | Owner |
-|-----------|--------|-------|
-| Data pipeline complete | A | Maxime |
-| Efficient frontier + CAL | B | Yusuf |
-| Streamlit UI | C | Kris |
-| Performance analysis | D | Emin |
-| ai_advisor scope (post-professor meeting) | E | TBD |
+| Module | Owner | Status | Branch |
+|--------|-------|--------|--------|
+| A — data_core | Maxime | ✅ Complete, 19 unit tests + 2 integration | `module-a` → merged |
+| B — optimisation | Yusuf | ✅ Complete, 21 unit tests | `module-b` → merged |
+| C — dashboard | Kris | 🔲 Not started | `module-c` |
+| D — analysis | Emin | 🔲 Not started | `module-d` |
+| E — ai_advisor | TBD | ⏸ Deferred pending professor meeting | — |
