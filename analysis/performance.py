@@ -51,3 +51,57 @@ def performance_metrics(
             "sharpe_ratio": sharpe,
         }
     )
+def portfolio_daily_returns(
+    asset_returns: pd.DataFrame,
+    weights: pd.Series,
+) -> pd.Series:
+    """
+    Daily returns of a portfolio with fixed weights.
+
+    Formula
+    -------
+        r_p,t = sum_i( w_i * r_i,t )        (one dot product per day)
+
+    The portfolio return on each day is the weighted average of that
+    day's asset returns. Keeping the weights fixed corresponds to daily
+    rebalancing back to the target allocation — the standard
+    simplification, consistent with Modules A and B.
+
+    Weights are aligned to the columns of `asset_returns` by ticker, so
+    column order does not matter. Raises if any ticker has no weight.
+    """
+    aligned_weights = weights.reindex(asset_returns.columns)
+    if aligned_weights.isna().any():
+        missing = list(aligned_weights[aligned_weights.isna()].index)
+        raise ValueError(f"No weight provided for: {missing}")
+
+    portfolio_returns = asset_returns.dot(aligned_weights)
+    portfolio_returns.name = "portfolio"
+    return portfolio_returns
+
+
+def apply_cash_allocation(
+    portfolio_returns: pd.Series,
+    risky_weight: float,
+    risk_free_rate: float = RISK_FREE_RATE,
+) -> pd.Series:
+    """
+    Blend the risky portfolio with cash (the risk-free asset).
+
+    Formula
+    -------
+        r_c,t = w_risky * r_p,t + (1 - w_risky) * (r_f / 252)
+
+    Cash earns the same small return every day and has zero volatility,
+    so mixing in cash scales both the excess return and the risk by
+    w_risky — which is exactly why the Sharpe ratio stays constant
+    along the Capital Allocation Line.
+
+    risky_weight must lie in [0, 1]: 1 = fully invested, 0 = all cash
+    (long-only, no leverage — consistent with Module B).
+    """
+    if not 0.0 <= risky_weight <= 1.0:
+        raise ValueError(f"risky_weight must be in [0, 1], got {risky_weight}")
+
+    daily_risk_free = risk_free_rate / TRADING_DAYS_PER_YEAR
+    return risky_weight * portfolio_returns + (1.0 - risky_weight) * daily_risk_free
