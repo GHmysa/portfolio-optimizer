@@ -18,10 +18,12 @@ from analysis.performance import (
     performance_metrics,
     portfolio_daily_returns,
 )
+from analysis.backtest import out_of_sample_backtest
 
 __all__ = [
     "performance_metrics",
     "portfolio_daily_returns",
     "apply_cash_allocation",
     "comparison_table",
+    "out_of_sample_backtest",
 ]
