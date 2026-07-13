@@ -3,11 +3,12 @@ import numpy as np
 from dashboard._utils import compute_cumulative_returns, weights_to_series
 
 
-def test_compute_cumulative_simple():
-    r = pd.Series([0.01, -0.005, 0.02])
+def test_compute_cumulative_preserves_index():
+    """Index (e.g. dates) must pass through unchanged."""
+    idx = pd.date_range("2024-01-01", periods=3, freq="B")
+    r = pd.Series([0.01, -0.005, 0.02], index=idx)
     cum = compute_cumulative_returns(r)
-    expected = (1 + r).cumprod()
-    pd.testing.assert_series_equal(cum, expected)
+    assert list(cum.index) == list(idx)
 
 
 def test_compute_cumulative_log():

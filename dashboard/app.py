@@ -29,7 +29,8 @@ from data_core import (
     get_cac40_names,
     load_reference_weights,
     compute_log_returns,
-    TRADING_DAYS_PER_YEAR,
+    annualized_return,
+    covariance_matrix,
     RISK_FREE_RATE,
 )
 
@@ -160,7 +161,6 @@ def main() -> None:
         end = pd.Timestamp(end_date)
 
     n_points = sidebar.slider("Efficient frontier points", min_value=20, max_value=200, value=50)
-    allow_leverage = sidebar.checkbox("Allow leverage on CAL (use with caution)", value=False)
     cash_slider = sidebar.slider("Cash allocation on CAL (0 = all cash, 1 = all risky)", min_value=0.0, max_value=1.0, value=1.0)
 
     if demo_mode:
@@ -175,8 +175,8 @@ def main() -> None:
 
                 # compute returns and statistics for optimisation inputs
                 returns = compute_log_returns(prices)
-                mu = returns.mean() * TRADING_DAYS_PER_YEAR
-                cov = returns.cov() * TRADING_DAYS_PER_YEAR
+                mu = annualized_return(returns)
+                cov = covariance_matrix(returns)
 
                 frontier_returns, frontier_vols, weights_grid = efficient_frontier(mu, cov, n_points=n_points)
                 mvp = minimum_variance_portfolio(mu, cov)
@@ -200,17 +200,17 @@ def main() -> None:
     if not isinstance(tang_w, pd.Series):
         tang_w = pd.Series(tang_w, index=data["tickers"])
 
-    # derive simple returns from prices if possible
+    # build portfolio daily log-returns and cumulative growth index
     if isinstance(data["prices"], pd.DataFrame) and not data["prices"].empty:
-        simple_returns = data["prices"].pct_change().dropna()
-        common = set(tang_w.index).intersection(simple_returns.columns)
+        log_returns = compute_log_returns(data["prices"])
+        common = set(tang_w.index).intersection(log_returns.columns)
         if len(common) == 0:
             st.warning("No common tickers between tangency weights and price columns — portfolio series cannot be constructed.")
             port_cum = pd.Series(dtype=float)
         else:
-            aligned_w = tang_w.reindex(simple_returns.columns).fillna(0)
-            port_returns = simple_returns.dot(aligned_w)
-            port_cum = (1 + port_returns).cumprod()
+            aligned_w = tang_w.reindex(log_returns.columns).fillna(0)
+            port_returns = log_returns.dot(aligned_w)
+            port_cum = compute_cumulative_returns(port_returns)
     else:
         port_cum = pd.Series(dtype=float)
 

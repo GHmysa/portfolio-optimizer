@@ -51,6 +51,8 @@ def performance_metrics(
             "sharpe_ratio": sharpe,
         }
     )
+
+
 def portfolio_daily_returns(
     asset_returns: pd.DataFrame,
     weights: pd.Series,

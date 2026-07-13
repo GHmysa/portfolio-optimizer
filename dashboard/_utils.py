@@ -3,54 +3,26 @@ import pandas as pd
 import numpy as np
 
 
-def compute_cumulative_returns(returns: pd.Series) -> pd.Series:
-    """Convert a returns series (log or simple) into cumulative return series.
+def compute_cumulative_returns(returns: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
+    """Convert a series of daily log-returns into a cumulative growth index.
+
+    Formula
+    -------
+        cumulative_t = exp( sum_{i=1}^{t} r_i )
+                     = prod_{i=1}^{t} exp(r_i)
+
+    A value of 1.0 means no change; 1.10 means +10 % since the start.
 
     Parameters
     ----------
-    returns : pd.Series or pd.DataFrame
-        Daily returns (either log-returns or simple returns). If DataFrame,
-        the operation is applied column-wise.
+    returns : daily log-returns from data_core.compute_log_returns().
+              Series (single asset) or DataFrame (multiple assets, column-wise).
 
     Returns
     -------
-    pd.Series or pd.DataFrame
-        Cumulative growth series where the first value is the period starting
-        level (1.0 = start).
-
-    Notes
-    -----
-    Detects log-returns heuristically: if absolute values are small (<0.5),
-    treats as log-returns and uses exp(cumsum); otherwise uses (1 + r).cumprod().
+    Same shape as input — cumulative growth factor at each date.
     """
-    if isinstance(returns, pd.DataFrame):
-        if returns.empty:
-            return returns.copy()
-        # heuristic: if all absolute values < 0.5 treat as log-returns
-        if (returns.abs().max() < 0.5).all():
-            return np.exp(returns).cumprod()
-        return (1 + returns).cumprod()
-
-    # Series
-    if returns.empty:
-        return returns.copy()
-    if abs(returns).max() < 0.5:
-        return np.exp(returns).cumprod()
-    return (1 + returns).cumprod()
-
-
-def compute_cumulative_returns(returns: pd.Series) -> pd.Series:
-    """Convert a returns series (log or simple) into cumulative return series.
-
-    Returns index is preserved. The result is a decimal cumulative growth (1.0 = no change).
-    """
-    # If values look like log returns (small), convert via exp
-    if (returns.abs().max() < 0.5).all() if isinstance(returns, pd.DataFrame) else abs(returns).max() < 0.5:
-        cum = np.exp(returns).cumprod()
-    else:
-        cum = (1 + returns).cumprod()
-    # If DataFrame, return DataFrame, else Series
-    return cum
+    return np.exp(returns).cumprod()
 
 
 def weights_to_series(weights: Iterable[float], tickers: Iterable[str]) -> pd.Series:
