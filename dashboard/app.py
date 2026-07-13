@@ -161,6 +161,11 @@ def main() -> None:
         end = pd.Timestamp(end_date)
 
     n_points = sidebar.slider("Efficient frontier points", min_value=20, max_value=200, value=50)
+    max_weight_pct = sidebar.slider(
+        "Max weight per stock (%)", min_value=5, max_value=100, value=15, step=5,
+        help="Cap the maximum allocation to any single stock. 100 = unconstrained.",
+    )
+    max_weight = max_weight_pct / 100
     cash_slider = sidebar.slider("Cash allocation on CAL (0 = all cash, 1 = all risky)", min_value=0.0, max_value=1.0, value=1.0)
 
     if demo_mode:
@@ -178,9 +183,9 @@ def main() -> None:
                 mu = annualized_return(returns)
                 cov = covariance_matrix(returns)
 
-                frontier_returns, frontier_vols, weights_grid = efficient_frontier(mu, cov, n_points=n_points)
-                mvp = minimum_variance_portfolio(mu, cov)
-                tangency = max_sharpe_portfolio(mu, cov, RISK_FREE_RATE)
+                frontier_returns, frontier_vols, weights_grid = efficient_frontier(mu, cov, n_points=n_points, max_weight=max_weight)
+                mvp = minimum_variance_portfolio(mu, cov, max_weight=max_weight)
+                tangency = max_sharpe_portfolio(mu, cov, RISK_FREE_RATE, max_weight=max_weight)
 
                 data = dict(tickers=tickers, prices=prices, benchmark=benchmark, frontier_returns=frontier_returns, frontier_vols=frontier_vols, mvp=mvp, tangency=tangency)
             except Exception as e:

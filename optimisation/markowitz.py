@@ -74,16 +74,49 @@ def sharpe_ratio(
 # Shared optimiser setup
 # ---------------------------------------------------------------------------
 
-def _long_only_fully_invested_constraints(n_assets: int) -> tuple[dict, tuple]:
+def _long_only_fully_invested_constraints(
+    n_assets: int, max_weight: float = 1.0
+) -> tuple[dict, tuple]:
     """
     Build the constraint set shared by every optimisation in this module.
 
-    * bounds: 0 <= w_i <= 1 for every asset            (long-only)
+    * bounds: 0 <= w_i <= max_weight for every asset   (long-only, optional cap)
     * constraint: sum(w_i) - 1 = 0                      (fully invested)
+
+    max_weight=1.0 (default) is the unconstrained long-only case.
+    Setting max_weight=0.15 prevents any single asset from exceeding 15 %
+    of the portfolio, which avoids concentration in a handful of past winners
+    — standard practice in real fund management.
     """
-    bounds = tuple((0.0, 1.0) for _ in range(n_assets))
+    if max_weight * n_assets < 1.0:
+        raise ValueError(
+            f"max_weight={max_weight:.2f} is too small: {n_assets} assets can "
+            f"only reach a total weight of {max_weight * n_assets:.2f} < 1.0 "
+            "(fully-invested requires the weights to sum to exactly 1)."
+        )
+    bounds = tuple((0.0, max_weight) for _ in range(n_assets))
     sum_to_one = {"type": "eq", "fun": lambda w: np.sum(w) - 1.0}
     return sum_to_one, bounds
+
+
+def _max_feasible_return(mu: pd.Series, max_weight: float) -> float:
+    """
+    Maximum portfolio return achievable given a per-asset weight cap.
+
+    Solved greedily: assign max_weight to the highest-return assets first
+    until the budget (sum = 1) is exhausted. This is exact because the
+    objective is linear in w.
+    """
+    sorted_mu = mu.sort_values(ascending=False).values
+    remaining = 1.0
+    result = 0.0
+    for m in sorted_mu:
+        alloc = min(max_weight, remaining)
+        result += alloc * m
+        remaining -= alloc
+        if remaining <= 1e-10:
+            break
+    return result
 
 
 def _equal_weights_starting_point(n_assets: int) -> np.ndarray:
@@ -96,7 +129,7 @@ def _equal_weights_starting_point(n_assets: int) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 def minimum_variance_portfolio(
-    mu: pd.Series, cov_matrix: pd.DataFrame
+    mu: pd.Series, cov_matrix: pd.DataFrame, max_weight: float = 1.0
 ) -> tuple[pd.Series, float, float]:
     """
     Find the long-only portfolio with the lowest possible volatility.
@@ -107,7 +140,11 @@ def minimum_variance_portfolio(
     Solves
     ------
         minimise    w^T . Sigma . w
-        subject to  sum(w_i) = 1,  w_i >= 0
+        subject to  sum(w_i) = 1,  0 <= w_i <= max_weight
+
+    Parameters
+    ----------
+    max_weight : maximum fraction in any single asset (default 1.0 = unconstrained).
 
     Returns
     -------
@@ -117,7 +154,7 @@ def minimum_variance_portfolio(
         volatility       — sigma_p at the found weights
     """
     n_assets = len(mu)
-    constraints, bounds = _long_only_fully_invested_constraints(n_assets)
+    constraints, bounds = _long_only_fully_invested_constraints(n_assets, max_weight)
     initial_weights = _equal_weights_starting_point(n_assets)
 
     result = minimize(
@@ -141,7 +178,8 @@ def minimum_variance_portfolio(
 # ---------------------------------------------------------------------------
 
 def max_sharpe_portfolio(
-    mu: pd.Series, cov_matrix: pd.DataFrame, risk_free_rate: float
+    mu: pd.Series, cov_matrix: pd.DataFrame, risk_free_rate: float,
+    max_weight: float = 1.0,
 ) -> tuple[pd.Series, float, float, float]:
     """
     Find the long-only portfolio that maximises the Sharpe ratio.
@@ -154,17 +192,21 @@ def max_sharpe_portfolio(
     Solves
     ------
         maximise    (w^T . mu - r_f) / sqrt(w^T . Sigma . w)
-        subject to  sum(w_i) = 1,  w_i >= 0
+        subject to  sum(w_i) = 1,  0 <= w_i <= max_weight
 
     scipy.optimize.minimize only minimises, so we minimise the negative
     Sharpe ratio instead.
+
+    Parameters
+    ----------
+    max_weight : maximum fraction in any single asset (default 1.0 = unconstrained).
 
     Returns
     -------
     (weights, expected_return, volatility, sharpe)
     """
     n_assets = len(mu)
-    constraints, bounds = _long_only_fully_invested_constraints(n_assets)
+    constraints, bounds = _long_only_fully_invested_constraints(n_assets, max_weight)
     initial_weights = _equal_weights_starting_point(n_assets)
 
     def negative_sharpe(w: np.ndarray) -> float:
@@ -192,19 +234,28 @@ def max_sharpe_portfolio(
 # ---------------------------------------------------------------------------
 
 def efficient_frontier(
-    mu: pd.Series, cov_matrix: pd.DataFrame, n_points: int = 50
+    mu: pd.Series, cov_matrix: pd.DataFrame, n_points: int = 50,
+    max_weight: float = 1.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Trace the long-only efficient frontier.
 
     For each target return between the minimum-variance portfolio's return
-    and the highest achievable single-asset return, find the portfolio
-    with the lowest possible volatility that achieves at least that return.
+    and the maximum feasible return, find the portfolio with the lowest
+    possible volatility that achieves at least that return.
 
     Solves, for each target return R_target
     -----------------------------------------
         minimise    w^T . Sigma . w
-        subject to  sum(w_i) = 1,  w_i >= 0,  w^T . mu = R_target
+        subject to  sum(w_i) = 1,  0 <= w_i <= max_weight,  w^T . mu = R_target
+
+    When max_weight < 1.0, the upper end of the frontier is capped by
+    _max_feasible_return() rather than mu.max() (which would require putting
+    100 % in one stock, infeasible under the cap).
+
+    Parameters
+    ----------
+    max_weight : maximum fraction in any single asset (default 1.0 = unconstrained).
 
     Returns
     -------
@@ -214,12 +265,12 @@ def efficient_frontier(
         weights       — np.ndarray, shape (n_points, n_assets)
     """
     n_assets = len(mu)
-    _, min_var_return, _ = minimum_variance_portfolio(mu, cov_matrix)
+    _, min_var_return, _ = minimum_variance_portfolio(mu, cov_matrix, max_weight)
 
-    # The frontier spans from the min-variance portfolio's return up to the
-    # highest expected return among individual assets (going higher than
-    # that is infeasible under long-only + fully-invested constraints).
-    max_return = mu.max()
+    # Upper bound: with a weight cap, we can no longer put 100 % in the
+    # highest-return asset, so mu.max() may be infeasible. Use the greedy
+    # max-return helper which respects the cap exactly.
+    max_return = _max_feasible_return(mu, max_weight)
     target_returns = np.linspace(min_var_return, max_return, n_points)
 
     returns = np.zeros(n_points)
@@ -227,7 +278,7 @@ def efficient_frontier(
     weights_grid = np.zeros((n_points, n_assets))
 
     initial_weights = _equal_weights_starting_point(n_assets)
-    bounds = tuple((0.0, 1.0) for _ in range(n_assets))
+    bounds = tuple((0.0, max_weight) for _ in range(n_assets))
 
     for i, target in enumerate(target_returns):
         sum_to_one = {"type": "eq", "fun": lambda w: np.sum(w) - 1.0}

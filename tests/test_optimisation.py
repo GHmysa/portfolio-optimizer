@@ -123,6 +123,13 @@ class TestMinimumVariancePortfolio:
         individual_sigmas = np.sqrt(np.diag(cov_matrix))
         assert mvp_volatility <= individual_sigmas.min() + 1e-8
 
+    def test_max_weight_constraint_respected(self, three_asset_correlated):
+        """No weight must exceed max_weight when the constraint is active."""
+        mu, cov_matrix = three_asset_correlated
+        weights, _, _ = minimum_variance_portfolio(mu, cov_matrix, max_weight=0.5)
+        assert (weights <= 0.5 + 1e-8).all()
+        assert weights.sum() == pytest.approx(1.0)
+
 
 # ---------------------------------------------------------------------------
 # max_sharpe_portfolio
@@ -155,6 +162,19 @@ class TestMaxSharpePortfolio:
         mu, cov_matrix = three_asset_correlated
         _, r_p, sigma_p, sharpe = max_sharpe_portfolio(mu, cov_matrix, RISK_FREE_RATE)
         assert sharpe == pytest.approx((r_p - RISK_FREE_RATE) / sigma_p)
+
+    def test_max_weight_constraint_respected(self, three_asset_correlated):
+        """No weight must exceed max_weight when the constraint is active."""
+        mu, cov_matrix = three_asset_correlated
+        weights, _, _, _ = max_sharpe_portfolio(mu, cov_matrix, RISK_FREE_RATE, max_weight=0.5)
+        assert (weights <= 0.5 + 1e-8).all()
+        assert weights.sum() == pytest.approx(1.0)
+
+    def test_infeasible_max_weight_raises(self, three_asset_correlated):
+        """max_weight so small that weights cannot sum to 1 must raise ValueError."""
+        mu, cov_matrix = three_asset_correlated  # 3 assets
+        with pytest.raises(ValueError, match="too small"):
+            max_sharpe_portfolio(mu, cov_matrix, RISK_FREE_RATE, max_weight=0.1)
 
 
 # ---------------------------------------------------------------------------
