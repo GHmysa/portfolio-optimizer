@@ -13,12 +13,12 @@ beats the actual CAC40 index.
 
 ```
 portfolio-optimizer/
-├── data_core/       Module A — data ingestion & statistics   (Maxime)   ✅ complete
+├── data_core/       Module A — data ingestion & statistics     (Maxime)   ✅ complete
 ├── optimisation/    Module B — Markowitz + Capital Allocation Line (Yusuf) ✅ complete
-├── dashboard/       Module C — Streamlit UI                  (Kris)     🔲 not started
-├── analysis/        Module D — performance comparison        (Emin)     🔲 not started
+├── dashboard/       Module C — Streamlit UI                    (Kris)     ✅ complete
+├── analysis/        Module D — performance comparison          (Emin)     ✅ complete
 ├── ai_advisor/      Module E — DEFERRED (see ai_advisor/README.md)
-└── tests/           pytest test suite (40 unit tests, 2 integration tests)
+└── tests/           pytest test suite (56 unit tests, 2 integration tests)
 ```
 
 ### How modules depend on each other
@@ -35,8 +35,6 @@ All other modules receive clean Python objects from it — no raw HTTP calls.
 ---
 
 ## Data Contract (what Module A provides)
-
-Import everything from `data_core` directly:
 
 ```python
 from data_core import (
@@ -58,13 +56,10 @@ from data_core import (
 ```
 
 **Default date range:** 2019-01-01 → 2024-12-31 (6 years, ~1,500 trading days).
-Pass `start=` and `end=` keyword args to override.
 
 ---
 
 ## Optimisation Contract (what Module B provides)
-
-Import from `optimisation` directly:
 
 ```python
 from optimisation import (
@@ -78,12 +73,10 @@ from optimisation import (
 )
 ```
 
-**How to call from real data:**
+**End-to-end usage example:**
 ```python
-from data_core import (
-    fetch_prices, compute_log_returns, annualized_return,
-    covariance_matrix, RISK_FREE_RATE
-)
+from data_core import fetch_prices, compute_log_returns, annualized_return
+from data_core import covariance_matrix, RISK_FREE_RATE
 from optimisation import max_sharpe_portfolio, capital_allocation_line
 
 prices  = fetch_prices()
@@ -93,7 +86,7 @@ sigma   = covariance_matrix(returns)
 
 weights, r_p, sigma_p, sharpe = max_sharpe_portfolio(mu, sigma, RISK_FREE_RATE)
 risky_w, cash_w, r_c = capital_allocation_line(
-    target_volatility=0.12,
+    target_volatility=0.10,
     tangency_return=r_p,
     tangency_volatility=sigma_p,
     risk_free_rate=RISK_FREE_RATE,
@@ -102,19 +95,37 @@ risky_w, cash_w, r_c = capital_allocation_line(
 
 ---
 
+## Analysis Contract (what Module D provides)
+
+```python
+from analysis import (
+    performance_metrics,      # pd.Series — (ann. return, ann. vol, sharpe)
+    portfolio_daily_returns,  # pd.Series — weighted sum of asset log-returns
+    apply_cash_allocation,    # pd.Series — blended risky + cash daily returns
+    comparison_table,         # pd.DataFrame — side-by-side metrics for N series
+)
+```
+
+Run the full comparison script:
+```bash
+python -m analysis.run_comparison
+```
+
+---
+
 ## Known Data Limitations (read before writing your report)
 
 | # | Limitation | Impact | Mitigation |
 |---|-----------|--------|------------|
-| 1 | Euronext only publishes top-25 weights publicly | Weights for the remaining 15 constituents (~9.43 % of index) are unavailable without a paid data licence | `load_reference_weights()` provides the 25 confirmed weights for the dashboard concentration chart; all return calculations use `^FCHI` directly — no per-stock weights needed |
-| 2 | `^FCHI` is a **price-return** index on Yahoo Finance | Understates the true index total return by ~2 % p.a. (dividends excluded) | Note in report; for rigour, compare against CAC 40 GR (gross return) if available |
-| 3 | Constituent list is a static snapshot (Euronext stocks page, verified 2026-06-21) | CAC40 rebalances quarterly; one or two names may change | Historical analysis is run over a fixed past window where the composition was stable; rebalancing risk is minor for a 5-year backtest |
-| 4 | ArcelorMittal uses the Amsterdam listing `MT.AS` | Only non-`.PA` ticker; Euronext Amsterdam and Paris may have different public holidays | `fetch_prices()` forward-fills across non-trading days, aligning all series to the same daily grid |
-| 5 | Stellantis `STLAP.PA` is dual-listed (Paris + Milan + NYSE) | Yahoo Finance coverage of the Paris listing can be inconsistent | `fetch_prices()` drops failed tickers with a warning; run the integration test to verify before the full download |
+| 1 | Euronext only publishes top-25 weights publicly | Weights for the remaining 15 constituents (~9.43 % of index) are unavailable without a paid data licence | `load_reference_weights()` provides the 25 confirmed weights for the dashboard concentration chart; all return calculations use `^FCHI` directly |
+| 2 | `^FCHI` is a **price-return** index on Yahoo Finance | Understates true index total return by ~2 % p.a. (dividends excluded) | Note in report; the true total-return benchmark would show ~2 pp p.a. higher performance |
+| 3 | Constituent list is a static snapshot (verified 2026-06-21) | CAC40 rebalances quarterly; one or two names may change | Historical analysis is run over a fixed past window where the composition was stable |
+| 4 | ArcelorMittal uses the Amsterdam listing `MT.AS` | Only non-`.PA` ticker; different public holidays possible | `fetch_prices()` forward-fills across non-trading days, aligning all series |
+| 5 | Stellantis `STLAP.PA` is dual-listed (Paris + Milan + NYSE) | Yahoo Finance coverage of the Paris listing can be inconsistent | `fetch_prices()` drops failed tickers with a warning |
 
 ---
 
-## Setup Instructions (for Yusuf, Kris, Emin)
+## Setup Instructions
 
 ### 1. Clone and enter the repo
 
@@ -135,68 +146,53 @@ python3 -m venv venv
 source venv/bin/activate
 ```
 
-### 3. Install dependencies
+### 3. Install dependencies and the project itself
 
 ```bash
 pip install -r requirements.txt
+pip install -e .
 ```
 
-### 4. Run the test suite
+The second command (`pip install -e .`) registers all project modules
+(`data_core`, `optimisation`, `dashboard`, `analysis`) in the virtual
+environment. Without it, Streamlit and other entry points cannot find
+the modules. You only need to run it once per machine.
+
+### 4. Verify everything works
 
 ```bash
-# Unit tests only (no network, fast):
+# Unit tests — fast, no network required
 pytest tests/ -v -m "not integration"
+# Expected: 56 passed
 
-# Include live yfinance tests (requires internet):
+# Integration tests — downloads live data (~30 s)
 pytest tests/ -v
-```
 
-You should see **40 tests pass** with no failures before touching any code.
+# Performance comparison script
+python -m analysis.run_comparison
 
-### 5. Verify Modules A + B work end-to-end
-
-```python
-from data_core import fetch_prices, fetch_benchmark, compute_log_returns
-from data_core import annualized_return, covariance_matrix, RISK_FREE_RATE
-from optimisation import minimum_variance_portfolio, max_sharpe_portfolio, efficient_frontier
-
-prices  = fetch_prices()                    # ~15 s, downloads 40 tickers
-returns = compute_log_returns(prices)
-mu      = annualized_return(returns)
-sigma   = covariance_matrix(returns)
-
-mvp_weights, mvp_return, mvp_vol = minimum_variance_portfolio(mu, sigma)
-tan_weights, tan_return, tan_vol, sharpe = max_sharpe_portfolio(mu, sigma, RISK_FREE_RATE)
-ef_returns, ef_vols, ef_weights = efficient_frontier(mu, sigma, n_points=50)
-
-print(f"MVP:        return={mvp_return:.1%}  vol={mvp_vol:.1%}")
-print(f"Tangency:   return={tan_return:.1%}  vol={tan_vol:.1%}  Sharpe={sharpe:.2f}")
-```
-
-### Branch policy
-
-Each module lives on its own branch: `module-a`, `module-b`, `module-c`, `module-d`.
-Open a PR into `master` once your module passes tests and has been reviewed
-by at least one other team member.
-
----
-
-## Running the Dashboard (Module C — not yet built)
-
-```bash
+# Streamlit dashboard
 streamlit run dashboard/app.py
 ```
-
-Kris: implement `dashboard/app.py`. See `CLAUDE.md` for the required charts.
 
 ---
 
 ## Project Status
 
-| Module | Owner | Status | Branch |
-|--------|-------|--------|--------|
-| A — data_core | Maxime | ✅ Complete, 19 unit tests + 2 integration | `module-a` → merged |
-| B — optimisation | Yusuf | ✅ Complete, 21 unit tests | `module-b` → merged |
-| C — dashboard | Kris | 🔲 Not started | `module-c` |
-| D — analysis | Emin | 🔲 Not started | `module-d` |
+| Module | Owner | Status | Tests |
+|--------|-------|--------|-------|
+| A — data_core | Maxime | ✅ Complete | 13 unit + 6 returns + 2 integration |
+| B — optimisation | Yusuf | ✅ Complete | 21 unit |
+| C — dashboard | Kris | ✅ Complete | 3 unit |
+| D — analysis | Emin | ✅ Complete | 13 unit |
 | E — ai_advisor | TBD | ⏸ Deferred pending professor meeting | — |
+
+---
+
+## Branch Policy
+
+Work on your own module branch: `module-a`, `module-b`, `module-c`, `module-d`.
+Open a PR into `master` once your module passes tests and has been reviewed
+by at least one other team member.
+
+Commit message format: `module-X: short description of what changed`
