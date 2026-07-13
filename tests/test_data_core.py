@@ -59,6 +59,12 @@ class TestConstituents:
         assert "MT.AS" in get_cac40_tickers()
         assert "MT.PA" not in get_cac40_tickers()
 
+    def test_urw_in_ticker_list(self):
+        """URW.PA is in the ticker list but Yahoo Finance data only starts 2023.
+        fetch_prices() must drop it with a warning rather than truncating the
+        entire date range to 2023 (regression guard)."""
+        assert "URW.PA" in get_cac40_tickers()
+
     def test_risk_free_rate_reasonable(self):
         assert 0.0 < RISK_FREE_RATE < 0.10
 

@@ -70,13 +70,28 @@ def fetch_prices(
         )
         prices = prices.drop(columns=failed)
 
-    # Forward-fill then drop any remaining leading NaNs.
     # Forward-fill handles non-trading days (public holidays that differ by
     # country — e.g. ArcelorMittal on Euronext Amsterdam may have different
     # closure days than Paris stocks).
-    prices = prices.ffill().dropna()
+    prices = prices.ffill()
 
-    return prices
+    # After ffill, any remaining NaN must be at the START of a column — the
+    # ticker had no data at the beginning of the requested window (e.g. a
+    # company that listed or was restructured after the start date).
+    # Drop those columns so one late-starting ticker does not silently truncate
+    # the entire date range for all 40 stocks.
+    short_history = prices.columns[prices.isna().any()].tolist()
+    if short_history:
+        warnings.warn(
+            f"Tickers dropped (insufficient history for the full requested period): "
+            f"{short_history}\n"
+            "Possible cause: the company was formed or listed after the start date "
+            "(e.g. URW.PA data only available from 2023 on Yahoo Finance).",
+            stacklevel=2,
+        )
+        prices = prices.drop(columns=short_history)
+
+    return prices.dropna()
 
 
 def fetch_benchmark(
