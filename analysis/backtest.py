@@ -87,7 +87,7 @@ def out_of_sample_backtest(
     dropped = set(weights.index) - set(common_tickers)
     if dropped:
         warnings.warn(
-            f"Tickers in estimation but absent from evaluation window — "
+            f"Tickers in estimation but absent from evaluation window -- "
             f"redistributing their weights proportionally: {sorted(dropped)}",
             stacklevel=2,
         )

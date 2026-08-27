@@ -82,6 +82,28 @@ def cached_fetch_benchmark(start, end):
     return fetch_benchmark(start=start.strftime("%Y-%m-%d"), end=end.strftime("%Y-%m-%d"))
 
 
+@st.cache_data(ttl=60 * 60)
+def cached_run_optimisation(prices: pd.DataFrame, max_weight: float, n_points: int):
+    """Run MVP, max-Sharpe, and efficient frontier. Cached by (prices, max_weight, n_points)."""
+    log_ret = compute_log_returns(prices)
+    mu = annualized_return(log_ret)
+    cov = covariance_matrix(log_ret)
+    mvp = minimum_variance_portfolio(mu, cov, max_weight=max_weight)
+    tangency = max_sharpe_portfolio(mu, cov, RISK_FREE_RATE, max_weight=max_weight)
+    frontier = efficient_frontier(mu, cov, n_points=n_points, max_weight=max_weight)
+    return mvp, tangency, frontier
+
+
+@st.cache_data(ttl=60 * 60)
+def cached_run_backtest(
+    est_prices: pd.DataFrame,
+    eval_prices: pd.DataFrame,
+    eval_bench: pd.Series,
+    max_weight: float,
+):
+    """Run the out-of-sample backtest. Cached by the price inputs and max_weight."""
+    return out_of_sample_backtest(est_prices, eval_prices, eval_bench, max_weight=max_weight)
+
 
 def plot_cumulative(portfolio_cum: pd.Series, benchmark_cum: pd.Series) -> go.Figure:
     fig = go.Figure()
@@ -204,14 +226,9 @@ def main() -> None:
                 prices = cached_fetch_prices(tickers, start, end)
                 benchmark = cached_fetch_benchmark(start, end)
 
-                # compute returns and statistics for optimisation inputs
-                returns = compute_log_returns(prices)
-                mu = annualized_return(returns)
-                cov = covariance_matrix(returns)
-
-                frontier_returns, frontier_vols, weights_grid = efficient_frontier(mu, cov, n_points=n_points, max_weight=max_weight)
-                mvp = minimum_variance_portfolio(mu, cov, max_weight=max_weight)
-                tangency = max_sharpe_portfolio(mu, cov, RISK_FREE_RATE, max_weight=max_weight)
+                mvp, tangency, (frontier_returns, frontier_vols, weights_grid) = cached_run_optimisation(
+                    prices, max_weight, n_points
+                )
 
                 data = dict(tickers=tickers, prices=prices, benchmark=benchmark, frontier_returns=frontier_returns, frontier_vols=frontier_vols, mvp=mvp, tangency=tangency)
             except Exception as e:
@@ -323,8 +340,8 @@ def main() -> None:
                         pd.Timestamp("2022-01-01"), pd.Timestamp("2024-12-31")
                     )
 
-                    bt = out_of_sample_backtest(
-                        est_prices, eval_prices, eval_bench, max_weight=max_weight
+                    bt = cached_run_backtest(
+                        est_prices, eval_prices, eval_bench, max_weight
                     )
 
                     st.markdown(
