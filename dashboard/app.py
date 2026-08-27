@@ -9,6 +9,7 @@ Minimal interactive app showing:
 The app provides a demo fallback if live data or optimisation inputs are not available.
 """
 from typing import Optional
+import warnings
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
@@ -74,7 +75,19 @@ def safe_run_demo() -> dict:
 
 @st.cache_data(ttl=60 * 60)
 def cached_fetch_prices(tickers, start, end):
-    return fetch_prices(tickers=tickers, start=start.strftime("%Y-%m-%d"), end=end.strftime("%Y-%m-%d"))
+    """Fetch prices and capture any ticker-drop warnings so they survive caching.
+
+    fetch_prices() drops tickers with no/insufficient data via warnings.warn(),
+    which never reaches the Streamlit UI on its own. We record those messages
+    here (inside the cached function body) so they are returned — and still
+    shown — even on a cache hit, when the warnings.warn() call itself would
+    not re-run.
+    """
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        prices = fetch_prices(tickers=tickers, start=start.strftime("%Y-%m-%d"), end=end.strftime("%Y-%m-%d"))
+    messages = [str(w.message) for w in caught]
+    return prices, messages
 
 
 @st.cache_data(ttl=60 * 60)
@@ -194,11 +207,14 @@ def main() -> None:
     sidebar = st.sidebar
     sidebar.title("Settings")
     demo_mode = sidebar.checkbox("Demo mode", value=False)
-    # Date range selector
+    # Date range selector — defaults match the written report (2019-01-01 to
+    # 2024-12-31, in-sample figures: 18.7% return, 18.4% vol, 0.89 Sharpe).
     today = pd.Timestamp.today().normalize()
-    default_start = today - pd.Timedelta(days=5 * 365)
+    yesterday = today - pd.Timedelta(days=1)
+    default_start = pd.Timestamp("2019-01-01")
+    default_end = pd.Timestamp("2024-12-31")
     start_date = sidebar.date_input("Start date", value=default_start)
-    end_date = sidebar.date_input("End date", value=today)
+    end_date = sidebar.date_input("End date", value=default_end)
     if isinstance(start_date, pd.Timestamp):
         start = start_date
     else:
@@ -207,6 +223,10 @@ def main() -> None:
         end = end_date
     else:
         end = pd.Timestamp(end_date)
+
+    if end >= today:
+        sidebar.warning(f"End date must be in the past — adjusted to {yesterday.date()}.")
+        end = yesterday
 
     n_points = sidebar.slider("Efficient frontier points", min_value=20, max_value=200, value=50)
     max_weight_pct = sidebar.slider(
@@ -223,7 +243,9 @@ def main() -> None:
             try:
                 tickers = get_cac40_tickers()
                 names = get_cac40_names()
-                prices = cached_fetch_prices(tickers, start, end)
+                prices, price_warnings = cached_fetch_prices(tickers, start, end)
+                for msg in price_warnings:
+                    st.warning(msg)
                 benchmark = cached_fetch_benchmark(start, end)
 
                 mvp, tangency, (frontier_returns, frontier_vols, weights_grid) = cached_run_optimisation(
@@ -323,6 +345,10 @@ def main() -> None:
         st.plotly_chart(plot_concentration(data["ref_weights"]), use_container_width=True)
 
     st.divider()
+    st.caption(
+        "This validation always uses a fixed 2019–2021 estimation window and "
+        "2022–2024 evaluation window, independent of the date range selected above."
+    )
     with st.expander("Out-of-sample validation (fit 2019–2021, evaluate 2022–2024)"):
         if demo_mode:
             st.info("Out-of-sample validation requires live data. Disable Demo mode to run it.")
@@ -330,15 +356,17 @@ def main() -> None:
             with st.spinner("Running out-of-sample backtest (fetching two price windows)..."):
                 try:
                     bt_tickers = get_cac40_tickers()
-                    est_prices = cached_fetch_prices(
+                    est_prices, est_warnings = cached_fetch_prices(
                         bt_tickers, pd.Timestamp("2019-01-01"), pd.Timestamp("2021-12-31")
                     )
-                    eval_prices = cached_fetch_prices(
+                    eval_prices, eval_warnings = cached_fetch_prices(
                         bt_tickers, pd.Timestamp("2022-01-01"), pd.Timestamp("2024-12-31")
                     )
                     eval_bench = cached_fetch_benchmark(
                         pd.Timestamp("2022-01-01"), pd.Timestamp("2024-12-31")
                     )
+                    for msg in est_warnings + eval_warnings:
+                        st.warning(msg)
 
                     bt = cached_run_backtest(
                         est_prices, eval_prices, eval_bench, max_weight
