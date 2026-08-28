@@ -9,6 +9,7 @@ Minimal interactive app showing:
 The app provides a demo fallback if live data or optimisation inputs are not available.
 """
 from typing import Optional
+import re
 import warnings
 import streamlit as st
 import plotly.express as px
@@ -88,6 +89,27 @@ def cached_fetch_prices(tickers, start, end):
         prices = fetch_prices(tickers=tickers, start=start.strftime("%Y-%m-%d"), end=end.strftime("%Y-%m-%d"))
     messages = [str(w.message) for w in caught]
     return prices, messages
+
+
+def summarize_dropped_tickers(messages: list[str]) -> Optional[str]:
+    """Build one human-readable note from fetch_prices() ticker-drop warnings.
+
+    Each warning from data_core.fetcher embeds the affected tickers as a
+    Python-repr'd list, e.g. "...dropped: ['URW.PA']...". Extracting them by
+    pattern (rather than hardcoding a specific symbol) means the note still
+    makes sense if a different ticker gets dropped for a different reason.
+    """
+    tickers: set[str] = set()
+    for msg in messages:
+        for bracket in re.findall(r"\[([^\]]*)\]", msg):
+            tickers.update(t.strip(" '\"") for t in bracket.split(",") if t.strip(" '\""))
+    if not tickers:
+        return None
+    return (
+        f"Note: {', '.join(sorted(tickers))} excluded from this analysis — "
+        "insufficient or missing Yahoo Finance price history for the selected "
+        "date range(s)."
+    )
 
 
 @st.cache_data(ttl=60 * 60)
@@ -236,6 +258,11 @@ def main() -> None:
     max_weight = max_weight_pct / 100
     cash_slider = sidebar.slider("Cash allocation on CAL (0 = all cash, 1 = all risky)", min_value=0.0, max_value=1.0, value=1.0)
 
+    price_warnings: list[str] = []
+    bt_warnings: list[str] = []
+    est_prices = eval_prices = eval_bench = None
+    backtest_error: Optional[str] = None
+
     if demo_mode:
         data = safe_run_demo()
     else:
@@ -244,8 +271,6 @@ def main() -> None:
                 tickers = get_cac40_tickers()
                 names = get_cac40_names()
                 prices, price_warnings = cached_fetch_prices(tickers, start, end)
-                for msg in price_warnings:
-                    st.warning(msg)
                 benchmark = cached_fetch_benchmark(start, end)
 
                 mvp, tangency, (frontier_returns, frontier_vols, weights_grid) = cached_run_optimisation(
@@ -256,6 +281,28 @@ def main() -> None:
             except Exception as e:
                 st.error(f"Live data failed: {e}. Switching to demo mode.")
                 data = safe_run_demo()
+
+        # Fetch the fixed out-of-sample backtest windows up front (own try/except
+        # so a backtest-only failure doesn't drop the whole dashboard into demo
+        # mode) so their drop-warnings can join the single top-of-page note below.
+        try:
+            bt_tickers = get_cac40_tickers()
+            est_prices, est_warnings = cached_fetch_prices(
+                bt_tickers, pd.Timestamp("2019-01-01"), pd.Timestamp("2021-12-31")
+            )
+            eval_prices, eval_warnings = cached_fetch_prices(
+                bt_tickers, pd.Timestamp("2022-01-01"), pd.Timestamp("2024-12-31")
+            )
+            eval_bench = cached_fetch_benchmark(
+                pd.Timestamp("2022-01-01"), pd.Timestamp("2024-12-31")
+            )
+            bt_warnings = est_warnings + eval_warnings
+        except Exception as e:
+            backtest_error = str(e)
+
+    drop_note = summarize_dropped_tickers(price_warnings + bt_warnings)
+    if drop_note:
+        st.warning(drop_note)
 
     # Load reference weights for concentration chart if available
     try:
@@ -352,22 +399,11 @@ def main() -> None:
     with st.expander("Out-of-sample validation (fit 2019–2021, evaluate 2022–2024)"):
         if demo_mode:
             st.info("Out-of-sample validation requires live data. Disable Demo mode to run it.")
+        elif backtest_error is not None:
+            st.error(f"Out-of-sample backtest failed: {backtest_error}")
         else:
-            with st.spinner("Running out-of-sample backtest (fetching two price windows)..."):
+            with st.spinner("Running out-of-sample backtest..."):
                 try:
-                    bt_tickers = get_cac40_tickers()
-                    est_prices, est_warnings = cached_fetch_prices(
-                        bt_tickers, pd.Timestamp("2019-01-01"), pd.Timestamp("2021-12-31")
-                    )
-                    eval_prices, eval_warnings = cached_fetch_prices(
-                        bt_tickers, pd.Timestamp("2022-01-01"), pd.Timestamp("2024-12-31")
-                    )
-                    eval_bench = cached_fetch_benchmark(
-                        pd.Timestamp("2022-01-01"), pd.Timestamp("2024-12-31")
-                    )
-                    for msg in est_warnings + eval_warnings:
-                        st.warning(msg)
-
                     bt = cached_run_backtest(
                         est_prices, eval_prices, eval_bench, max_weight
                     )
