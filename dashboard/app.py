@@ -91,24 +91,49 @@ def cached_fetch_prices(tickers, start, end):
     return prices, messages
 
 
-def summarize_dropped_tickers(messages: list[str]) -> Optional[str]:
-    """Build one human-readable note from fetch_prices() ticker-drop warnings.
+def extract_dropped_tickers(messages: list[str]) -> set[str]:
+    """Pull ticker symbols out of fetch_prices() drop-warning text.
 
     Each warning from data_core.fetcher embeds the affected tickers as a
     Python-repr'd list, e.g. "...dropped: ['URW.PA']...". Extracting them by
-    pattern (rather than hardcoding a specific symbol) means the note still
-    makes sense if a different ticker gets dropped for a different reason.
+    pattern (rather than hardcoding a specific symbol) means callers still
+    make sense if a different ticker gets dropped for a different reason.
     """
     tickers: set[str] = set()
     for msg in messages:
         for bracket in re.findall(r"\[([^\]]*)\]", msg):
             tickers.update(t.strip(" '\"") for t in bracket.split(",") if t.strip(" '\""))
+    return tickers
+
+
+def summarize_dropped_tickers(messages: list[str]) -> Optional[str]:
+    """Note for the main chart's currently-selected date range."""
+    tickers = extract_dropped_tickers(messages)
     if not tickers:
         return None
     return (
         f"Note: {', '.join(sorted(tickers))} excluded from this analysis — "
         "insufficient or missing Yahoo Finance price history for the selected "
         "date range(s)."
+    )
+
+
+def summarize_backtest_dropped_tickers(messages: list[str]) -> Optional[str]:
+    """Note for the fixed out-of-sample backtest windows specifically.
+
+    Kept separate from summarize_dropped_tickers() because the backtest's
+    2019-2021/2022-2024 windows are fixed regardless of the sidebar's date
+    range (see the caption above the expander) — a ticker dropped here says
+    nothing about whether it is also dropped from the main chart above.
+    """
+    tickers = extract_dropped_tickers(messages)
+    if not tickers:
+        return None
+    return (
+        f"Note: {', '.join(sorted(tickers))} excluded from this fixed backtest "
+        "window — insufficient or missing Yahoo Finance price history for the "
+        "2019–2021 / 2022–2024 period (expected for recently-listed tickers, "
+        "independent of the date range selected above)."
     )
 
 
@@ -284,7 +309,9 @@ def main() -> None:
 
         # Fetch the fixed out-of-sample backtest windows up front (own try/except
         # so a backtest-only failure doesn't drop the whole dashboard into demo
-        # mode) so their drop-warnings can join the single top-of-page note below.
+        # mode). Their drop-warnings are reported separately, next to the
+        # backtest's own caption below — not mixed into the main chart's note,
+        # since these windows are fixed regardless of the sidebar's date range.
         try:
             bt_tickers = get_cac40_tickers()
             est_prices, est_warnings = cached_fetch_prices(
@@ -300,9 +327,11 @@ def main() -> None:
         except Exception as e:
             backtest_error = str(e)
 
-    drop_note = summarize_dropped_tickers(price_warnings + bt_warnings)
+    drop_note = summarize_dropped_tickers(price_warnings)
     if drop_note:
         st.warning(drop_note)
+
+    bt_drop_note = summarize_backtest_dropped_tickers(bt_warnings)
 
     # Load reference weights for concentration chart if available
     try:
@@ -396,6 +425,8 @@ def main() -> None:
         "This validation always uses a fixed 2019–2021 estimation window and "
         "2022–2024 evaluation window, independent of the date range selected above."
     )
+    if bt_drop_note:
+        st.caption(bt_drop_note)
     with st.expander("Out-of-sample validation (fit 2019–2021, evaluate 2022–2024)"):
         if demo_mode:
             st.info("Out-of-sample validation requires live data. Disable Demo mode to run it.")
