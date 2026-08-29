@@ -5,6 +5,7 @@ Minimal interactive app showing:
 - efficient frontier with MVP and tangency portfolio
 - capital allocation line
 - tangency portfolio weights
+- overweight/underweight vs. the CAC40 index, with rule-based commentary
 
 The app provides a demo fallback if live data or optimisation inputs are not available.
 """
@@ -43,7 +44,7 @@ except Exception:
     # When run as a script (streamlit run dashboard/app.py)
     from dashboard._utils import compute_cumulative_returns, rolling_sharpe, weights_to_series
 
-from analysis import out_of_sample_backtest
+from analysis import out_of_sample_backtest, build_positioning_report
 
 
 def safe_run_demo() -> dict:
@@ -348,6 +349,7 @@ def main() -> None:
 
     # build portfolio daily log-returns and cumulative growth index
     port_returns = pd.Series(dtype=float)
+    log_returns = None
     if isinstance(data["prices"], pd.DataFrame) and not data["prices"].empty:
         log_returns = compute_log_returns(data["prices"])
         common = set(tang_w.index).intersection(log_returns.columns)
@@ -419,6 +421,35 @@ def main() -> None:
     if data.get("ref_weights") is not None:
         st.header("Index concentration (25 weights)")
         st.plotly_chart(plot_concentration(data["ref_weights"]), use_container_width=True)
+
+    if log_returns is not None and data.get("ref_weights") is not None:
+        st.header("Overweight / underweight vs. index")
+        st.caption(
+            "Compares the optimised portfolio's weights to the CAC40's official index "
+            "weights (25 of 40 constituents; the rest have no publicly available Euronext "
+            "weight and are flagged below rather than hidden). Sorted by the size of the "
+            "tilt, in either direction. Commentary is rule-based (not machine learning) — "
+            "see analysis/positioning.py for every threshold used."
+        )
+        try:
+            positioning = build_positioning_report(log_returns, tang_w, data["ref_weights"])
+            display_table = positioning.reset_index()
+            st.dataframe(
+                display_table[[
+                    "ticker", "company_name", "optimized_weight_pct", "index_weight_pct",
+                    "delta_pct", "classification", "commentary",
+                ]].style.format(
+                    {
+                        "optimized_weight_pct": "{:.2f}%",
+                        "index_weight_pct": "{:.2f}%",
+                        "delta_pct": "{:+.2f}",
+                    },
+                    na_rep="--",
+                ),
+                use_container_width=True,
+            )
+        except Exception as e:
+            st.error(f"Could not build the overweight/underweight table: {e}")
 
     st.divider()
     st.caption(
