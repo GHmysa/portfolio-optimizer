@@ -7,18 +7,22 @@ allocation across its 40 constituent stocks plus a cash position (risk-free
 asset) to maximise risk-adjusted return, then measure whether the result
 beats the actual CAC40 index.
 
+**Live demo:** https://portfolio-optimizer-7tj5jmshqtuamvw2kv2dfk.streamlit.app
+
 ---
 
 ## Module Architecture
 
 ```
 portfolio-optimizer/
-├── data_core/       Module A — data ingestion & statistics     (Maxime)   ✅ complete
-├── optimisation/    Module B — Markowitz + Capital Allocation Line (Yusuf) ✅ complete
-├── dashboard/       Module C — Streamlit UI                    (Kris)     ✅ complete
-├── analysis/        Module D — performance comparison          (Emin)     ✅ complete
+├── data_core/       Module A — data ingestion & statistics         (Maxime) ✅ complete
+├── optimisation/    Module B — Markowitz + Capital Allocation Line (Yusuf)  ✅ complete
+├── dashboard/       Module C — Streamlit UI                        (Kris)   ✅ complete
+├── analysis/        Module D — performance comparison, out-of-sample
+│                    backtest, and overweight/underweight analysis  (Emin)   ✅ complete
 ├── ai_advisor/      Module E — DEFERRED (see ai_advisor/README.md)
-└── tests/           pytest test suite (56 unit tests, 2 integration tests)
+├── scripts/         one-time manual verification script (health_check.py)
+└── tests/           96 tests total (94 unit + 2 integration)
 ```
 
 ### How modules depend on each other
@@ -99,10 +103,15 @@ risky_w, cash_w, r_c = capital_allocation_line(
 
 ```python
 from analysis import (
-    performance_metrics,      # pd.Series — (ann. return, ann. vol, sharpe)
-    portfolio_daily_returns,  # pd.Series — weighted sum of asset log-returns
-    apply_cash_allocation,    # pd.Series — blended risky + cash daily returns
-    comparison_table,         # pd.DataFrame — side-by-side metrics for N series
+    performance_metrics,        # pd.Series — (ann. return, ann. vol, sharpe)
+    portfolio_daily_returns,    # pd.Series — weighted sum of asset log-returns
+    apply_cash_allocation,      # pd.Series — blended risky + cash daily returns
+    comparison_table,           # pd.DataFrame — side-by-side metrics for N series
+    out_of_sample_backtest,     # dict — fit on one window, evaluate on another, unseen window
+    compute_stock_stats,        # pd.DataFrame — per-ticker Sharpe/vol/skew/correlation + percentiles
+    compute_overweight_table,   # pd.DataFrame — optimised weight vs. index weight, classified
+    generate_commentary,        # str — rule-based, one-sentence explanation for a tilt
+    build_positioning_report,   # pd.DataFrame — the full overweight/underweight report
 )
 ```
 
@@ -111,15 +120,20 @@ Run the full comparison script:
 python -m analysis.run_comparison
 ```
 
+Run the out-of-sample backtest script:
+```bash
+python -m analysis.run_backtest
+```
+
 ---
 
 ## Known Data Limitations (read before writing your report)
 
 | # | Limitation | Impact | Mitigation |
 |---|-----------|--------|------------|
-| 1 | Euronext only publishes top-25 weights publicly | Weights for the remaining 15 constituents (~9.43 % of index) are unavailable without a paid data licence | `load_reference_weights()` provides the 25 confirmed weights for the dashboard concentration chart; all return calculations use `^FCHI` directly |
+| 1 | Euronext only publishes top-25 weights publicly | Weights for the remaining 15 constituents (~9.43 % of index) are unavailable without a paid data licence | `load_reference_weights()` provides the 25 confirmed weights for the dashboard concentration chart and the overweight/underweight table; all return calculations use `^FCHI` directly |
 | 2 | `^FCHI` is a **price-return** index on Yahoo Finance | Understates true index total return by ~2 % p.a. (dividends excluded) | Note in report; the true total-return benchmark would show ~2 pp p.a. higher performance |
-| 3 | Constituent list is a static snapshot (verified 2026-06-21) | CAC40 rebalances quarterly; one or two names may change | Historical analysis is run over a fixed past window where the composition was stable |
+| 3 | Constituent list is a static snapshot (verified 2026-06-19) | CAC40 rebalances quarterly; one or two names may change | Historical analysis is run over a fixed past window where the composition was stable |
 | 4 | ArcelorMittal uses the Amsterdam listing `MT.AS` | Only non-`.PA` ticker; different public holidays possible | `fetch_prices()` forward-fills across non-trading days, aligning all series |
 | 5 | Stellantis `STLAP.PA` is dual-listed (Paris + Milan + NYSE) | Yahoo Finance coverage of the Paris listing can be inconsistent | `fetch_prices()` drops failed tickers with a warning |
 
@@ -163,13 +177,17 @@ the modules. You only need to run it once per machine.
 ```bash
 # Unit tests — fast, no network required
 pytest tests/ -v -m "not integration"
-# Expected: 56 passed
+# Expected: 94 passed
 
 # Integration tests — downloads live data (~30 s)
 pytest tests/ -v
+# Expected: 96 passed
 
 # Performance comparison script
 python -m analysis.run_comparison
+
+# One-time manual pre-deployment check (not part of the automated suite)
+python -m scripts.health_check
 
 # Streamlit dashboard
 streamlit run dashboard/app.py
@@ -181,11 +199,13 @@ streamlit run dashboard/app.py
 
 | Module | Owner | Status | Tests |
 |--------|-------|--------|-------|
-| A — data_core | Maxime | ✅ Complete | 13 unit + 6 returns + 2 integration |
-| B — optimisation | Yusuf | ✅ Complete | 21 unit |
-| C — dashboard | Kris | ✅ Complete | 3 unit |
-| D — analysis | Emin | ✅ Complete | 13 unit |
+| A — data_core | Maxime | ✅ Complete | 22 (20 unit + 2 integration) |
+| B — optimisation | Yusuf | ✅ Complete | 24 unit |
+| C — dashboard | Kris | ✅ Complete | 6 unit (`dashboard/_utils.py`) |
+| D — analysis | Emin | ✅ Complete | 44 unit (13 performance + 8 backtest + 23 positioning) |
 | E — ai_advisor | TBD | ⏸ Deferred pending professor meeting | — |
+
+**Total: 96 tests, all passing** (`pytest tests/`).
 
 ---
 

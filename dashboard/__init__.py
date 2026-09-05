@@ -2,8 +2,10 @@
 dashboard — Module C
 
 Owner: Kris
-Responsibility: Streamlit UI — efficient frontier + CAL plot, weights pie
-chart, and the CAC40 vs optimised portfolio performance comparison chart.
+Responsibility: Streamlit UI — cumulative return comparison, efficient
+frontier + Capital Allocation Line, tangency portfolio weights, index
+concentration, overweight/underweight analysis with rule-based commentary,
+and an out-of-sample backtest expander.
 
-TODO: implement once Modules A and B are reviewed and merged.
+Entry point: streamlit run dashboard/app.py
 """
